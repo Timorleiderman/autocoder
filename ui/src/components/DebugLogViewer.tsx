@@ -3,16 +3,23 @@
  *
  * Collapsible panel at the bottom of the screen showing real-time
  * agent output (tool calls, results, steps). Similar to browser DevTools.
+ * Features a resizable height via drag handle.
  */
 
-import { useEffect, useRef, useState } from 'react'
-import { ChevronUp, ChevronDown, Trash2, Terminal } from 'lucide-react'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { ChevronUp, ChevronDown, Trash2, Terminal, GripHorizontal } from 'lucide-react'
+
+const MIN_HEIGHT = 150
+const MAX_HEIGHT = 600
+const DEFAULT_HEIGHT = 288
+const STORAGE_KEY = 'debug-panel-height'
 
 interface DebugLogViewerProps {
   logs: Array<{ line: string; timestamp: string }>
   isOpen: boolean
   onToggle: () => void
   onClear: () => void
+  onHeightChange?: (height: number) => void
 }
 
 type LogLevel = 'error' | 'warn' | 'debug' | 'info'
@@ -22,9 +29,16 @@ export function DebugLogViewer({
   isOpen,
   onToggle,
   onClear,
+  onHeightChange,
 }: DebugLogViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
+  const [isResizing, setIsResizing] = useState(false)
+  const [panelHeight, setPanelHeight] = useState(() => {
+    // Load saved height from localStorage
+    const saved = localStorage.getItem(STORAGE_KEY)
+    return saved ? Math.min(Math.max(parseInt(saved, 10), MIN_HEIGHT), MAX_HEIGHT) : DEFAULT_HEIGHT
+  })
 
   // Auto-scroll to bottom when new logs arrive (if user hasn't scrolled up)
   useEffect(() => {
@@ -32,6 +46,50 @@ export function DebugLogViewer({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [logs, autoScroll, isOpen])
+
+  // Notify parent of height changes
+  useEffect(() => {
+    if (onHeightChange && isOpen) {
+      onHeightChange(panelHeight)
+    }
+  }, [panelHeight, isOpen, onHeightChange])
+
+  // Handle mouse move during resize
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    const newHeight = window.innerHeight - e.clientY
+    const clampedHeight = Math.min(Math.max(newHeight, MIN_HEIGHT), MAX_HEIGHT)
+    setPanelHeight(clampedHeight)
+  }, [])
+
+  // Handle mouse up to stop resizing
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false)
+    // Save to localStorage
+    localStorage.setItem(STORAGE_KEY, panelHeight.toString())
+  }, [panelHeight])
+
+  // Set up global mouse event listeners during resize
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'ns-resize'
+      document.body.style.userSelect = 'none'
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isResizing, handleMouseMove, handleMouseUp])
+
+  // Start resizing
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsResizing(true)
+  }
 
   // Detect if user scrolled up
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -87,10 +145,23 @@ export function DebugLogViewer({
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-40 transition-all duration-200 ${
-        isOpen ? 'h-72' : 'h-10'
+      className={`fixed bottom-0 left-0 right-0 z-40 ${
+        isResizing ? '' : 'transition-all duration-200'
       }`}
+      style={{ height: isOpen ? panelHeight : 40 }}
     >
+      {/* Resize handle - only visible when open */}
+      {isOpen && (
+        <div
+          className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize group flex items-center justify-center -translate-y-1/2 z-50"
+          onMouseDown={handleResizeStart}
+        >
+          <div className="w-16 h-1.5 bg-[#333] rounded-full group-hover:bg-[#555] transition-colors flex items-center justify-center">
+            <GripHorizontal size={12} className="text-gray-500 group-hover:text-gray-400" />
+          </div>
+        </div>
+      )}
+
       {/* Header bar */}
       <div
         className="flex items-center justify-between h-10 px-4 bg-[#1a1a1a] border-t-3 border-black cursor-pointer"

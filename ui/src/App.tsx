@@ -28,6 +28,7 @@ function App() {
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null)
   const [setupComplete, setSetupComplete] = useState(true) // Start optimistic
   const [debugOpen, setDebugOpen] = useState(false)
+  const [debugPanelHeight, setDebugPanelHeight] = useState(288) // Default height
 
   const { data: projects, isLoading: projectsLoading } = useProjects()
   const { data: features } = useFeatures(selectedProject)
@@ -154,7 +155,10 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className={`max-w-7xl mx-auto px-4 py-8 ${debugOpen ? 'pb-80' : ''}`}>
+      <main
+        className="max-w-7xl mx-auto px-4 py-8"
+        style={{ paddingBottom: debugOpen ? debugPanelHeight + 32 : undefined }}
+      >
         {!selectedProject ? (
           <div className="neo-empty-state mt-12">
             <h2 className="font-display text-2xl font-bold mb-2">
@@ -224,6 +228,7 @@ function App() {
           isOpen={debugOpen}
           onToggle={() => setDebugOpen(!debugOpen)}
           onClear={wsState.clearLogs}
+          onHeightChange={setDebugPanelHeight}
         />
       )}
     </div>
